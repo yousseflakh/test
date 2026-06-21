@@ -120,24 +120,27 @@ if 'options' not in st.session_state:
     st.session_state.options = []
 if 'correct_ans' not in st.session_state:
     st.session_state.correct_ans = ""
-if 'option_colors' not in st.session_state:
-    st.session_state.option_colors = ["#ffcc00", "#ffcc00", "#ffcc00"]
+if 'option_states' not in st.session_state:
+    st.session_state.option_states = ["normal", "normal", "normal"]  # normal, correct, wrong
 if 'waiting_for_next' not in st.session_state:
     st.session_state.waiting_for_next = False
 if 'show_result' not in st.session_state:
     st.session_state.show_result = False
 if 'round_started' not in st.session_state:
     st.session_state.round_started = False
+if 'selected_answer' not in st.session_state:
+    st.session_state.selected_answer = None
 
 def reset_game():
     st.session_state.score = 0
     st.session_state.lives = 3
     st.session_state.game_over = False
     st.session_state.options = []
-    st.session_state.option_colors = ["#ffcc00", "#ffcc00", "#ffcc00"]
+    st.session_state.option_states = ["normal", "normal", "normal"]
     st.session_state.waiting_for_next = False
     st.session_state.show_result = False
     st.session_state.round_started = False
+    st.session_state.selected_answer = None
     start_round()
 
 def start_round():
@@ -170,15 +173,17 @@ def start_round():
     
     random.shuffle(opts)
     st.session_state.options = [fix_arabic_text(opt) for opt in opts]
-    st.session_state.option_colors = ["#ffcc00", "#ffcc00", "#ffcc00"]
+    st.session_state.option_states = ["normal", "normal", "normal"]
     st.session_state.waiting_for_next = False
     st.session_state.show_result = False
     st.session_state.round_started = True
+    st.session_state.selected_answer = None
 
 def check_answer(choice_index):
     if st.session_state.waiting_for_next or st.session_state.game_over:
         return
     
+    st.session_state.selected_answer = choice_index
     st.session_state.waiting_for_next = True
     
     # العثور على الخيار الصحيح
@@ -188,18 +193,18 @@ def check_answer(choice_index):
             correct_index = i
             break
     
-    # تغيير الألوان
-    st.session_state.option_colors = ["#ffcc00", "#ffcc00", "#ffcc00"]
+    # تحديث الحالات
+    st.session_state.option_states = ["normal", "normal", "normal"]
     
     if choice_index == correct_index:
         st.session_state.score += 10
-        st.session_state.option_colors[choice_index] = "#00ff00"  # أخضر
+        st.session_state.option_states[choice_index] = "correct"
         st.session_state.message = "✅ صحيح!"
     else:
         st.session_state.lives -= 1
-        st.session_state.option_colors[choice_index] = "#ff0000"  # أحمر
+        st.session_state.option_states[choice_index] = "wrong"
         if correct_index != -1:
-            st.session_state.option_colors[correct_index] = "#00ff00"  # أخضر للصحيح
+            st.session_state.option_states[correct_index] = "correct"
         st.session_state.message = f"❌ خطأ! الإجابة: {fix_arabic_text(st.session_state.correct_ans)}"
     
     st.session_state.show_result = True
@@ -268,27 +273,28 @@ def save_word(q, a):
     st.session_state.edit_mode = False
     return True
 
-# CSS
+# CSS متجاوب مع الموبايل
 st.markdown("""
 <style>
     .main {
         background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 100%);
-        padding: 20px;
+        padding: 10px;
         min-height: 100vh;
     }
     .game-container {
         background: rgba(10, 10, 30, 0.9);
         border-radius: 20px;
-        padding: 25px;
+        padding: 20px;
         margin: 0 auto;
         max-width: 500px;
-        min-height: 650px;
+        min-height: 600px;
         border: 1px solid rgba(0, 255, 200, 0.2);
         box-shadow: 0 0 50px rgba(0, 255, 200, 0.1);
     }
     .header {
         display: flex;
         justify-content: space-between;
+        align-items: center;
         padding: 10px 5px;
         margin-bottom: 20px;
     }
@@ -307,45 +313,65 @@ st.markdown("""
     .question-box {
         background: rgba(20, 20, 50, 0.8);
         border-radius: 15px;
-        padding: 30px 20px;
-        margin: 20px 0 30px 0;
+        padding: 25px 15px;
+        margin: 15px 0 25px 0;
         text-align: center;
         border: 1px solid rgba(0, 255, 200, 0.15);
-        min-height: 120px;
+        min-height: 100px;
         display: flex;
         align-items: center;
         justify-content: center;
     }
     .question-text {
         color: white;
-        font-size: 32px;
+        font-size: 28px;
         font-weight: bold;
         text-shadow: 0 0 30px rgba(255, 255, 255, 0.2);
         margin: 0;
+        word-wrap: break-word;
     }
     .options-container {
         display: flex;
         flex-direction: column;
-        gap: 12px;
-        margin: 20px 0;
+        gap: 10px;
+        margin: 15px 0;
     }
     .option-btn {
-        background: rgba(30, 30, 80, 0.7);
-        border: 2px solid #ffcc00;
-        border-radius: 12px;
-        padding: 15px;
-        font-size: 22px;
-        font-weight: bold;
         width: 100%;
+        padding: 15px;
+        border-radius: 12px;
+        font-size: 20px;
+        font-weight: bold;
+        border: 2px solid;
         cursor: pointer;
         text-align: center;
-        color: #ffcc00;
         transition: all 0.3s ease;
     }
-    .option-btn:hover {
+    .option-normal {
+        background: rgba(30, 30, 80, 0.7);
+        border-color: #ffcc00;
+        color: #ffcc00;
+    }
+    .option-normal:hover {
         background: rgba(0, 255, 200, 0.1);
         transform: scale(1.02);
         box-shadow: 0 0 20px rgba(0, 255, 200, 0.2);
+    }
+    .option-correct {
+        background: rgba(0, 255, 0, 0.2);
+        border-color: #00ff00;
+        color: #00ff00;
+        box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+    }
+    .option-wrong {
+        background: rgba(255, 0, 0, 0.2);
+        border-color: #ff0000;
+        color: #ff0000;
+        box-shadow: 0 0 20px rgba(255, 0, 0, 0.3);
+    }
+    .option-disabled {
+        opacity: 0.8;
+        cursor: not-allowed;
     }
     .game-over-box {
         background: rgba(20, 20, 50, 0.95);
@@ -364,10 +390,10 @@ st.markdown("""
     .dict-container {
         background: rgba(10, 10, 30, 0.9);
         border-radius: 20px;
-        padding: 25px;
+        padding: 20px;
         margin: 0 auto;
         max-width: 500px;
-        min-height: 650px;
+        min-height: 600px;
         border: 1px solid rgba(0, 255, 200, 0.2);
     }
     .word-row {
@@ -379,19 +405,23 @@ st.markdown("""
         justify-content: space-between;
         align-items: center;
         border: 1px solid rgba(0, 255, 200, 0.1);
+        flex-wrap: wrap;
+        gap: 8px;
     }
     .word-text {
         color: white;
         font-size: 16px;
         flex: 1;
+        min-width: 150px;
+        word-wrap: break-word;
     }
     .edit-container {
         background: rgba(10, 10, 30, 0.9);
         border-radius: 20px;
-        padding: 25px;
+        padding: 20px;
         margin: 0 auto;
         max-width: 500px;
-        min-height: 650px;
+        min-height: 600px;
         border: 1px solid rgba(0, 255, 200, 0.2);
     }
     .stButton > button {
@@ -403,6 +433,7 @@ st.markdown("""
         font-weight: bold;
         width: 100%;
         transition: all 0.3s ease;
+        font-size: 16px;
     }
     .stButton > button:hover {
         transform: scale(1.02);
@@ -451,6 +482,25 @@ st.markdown("""
     .next-btn {
         margin-top: 20px;
     }
+    
+    /* تحسينات الموبايل */
+    @media (max-width: 600px) {
+        .game-container, .dict-container, .edit-container {
+            padding: 15px;
+            border-radius: 15px;
+        }
+        .question-text {
+            font-size: 24px;
+        }
+        .option-btn {
+            font-size: 18px;
+            padding: 12px;
+        }
+        .word-row {
+            flex-direction: column;
+            align-items: stretch;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -484,45 +534,47 @@ if st.session_state.page == 'game':
         else:
             st.markdown(f'<div class="message-box error">{st.session_state.message}</div>', unsafe_allow_html=True)
     
-    # الخيارات - اللعبة الأساسية
-    if st.session_state.options and not st.session_state.game_over and not st.session_state.waiting_for_next:
+    # الخيارات - نظام اللعبة الأصلي مع 3 أزرار
+    if st.session_state.options and not st.session_state.game_over:
         st.markdown('<div class="options-container">', unsafe_allow_html=True)
+        
         for i, option in enumerate(st.session_state.options):
-            color = st.session_state.option_colors[i] if i < len(st.session_state.option_colors) else "#ffcc00"
+            # تحديد الكلاس المناسب
+            state = st.session_state.option_states[i]
+            if state == "correct":
+                btn_class = "option-btn option-correct"
+            elif state == "wrong":
+                btn_class = "option-btn option-wrong"
+            else:
+                btn_class = "option-btn option-normal"
             
-            # زر مخصص
-            button_style = f'''
-            <style>
-                .opt-btn-{i} {{
-                    background: rgba(30, 30, 80, 0.7);
-                    border: 2px solid {color};
-                    border-radius: 12px;
-                    padding: 15px;
-                    font-size: 22px;
-                    font-weight: bold;
-                    width: 100%;
-                    cursor: pointer;
-                    text-align: center;
-                    color: {color};
-                    transition: all 0.3s ease;
-                }}
-                .opt-btn-{i}:hover {{
-                    background: rgba(0, 255, 200, 0.1);
-                    transform: scale(1.02);
-                }}
-            </style>
+            # إضافة disabled إذا كانت الإجابة محددة
+            disabled_attr = "disabled" if st.session_state.waiting_for_next else ""
+            disabled_class = " option-disabled" if st.session_state.waiting_for_next else ""
+            
+            button_html = f'''
+            <button 
+                class="{btn_class}{disabled_class}" 
+                {disabled_attr}
+                onclick="document.getElementById('opt_btn_{i}').click()"
+            >
+                {option}
+            </button>
             '''
-            st.markdown(button_style, unsafe_allow_html=True)
+            st.markdown(button_html, unsafe_allow_html=True)
             
-            if st.button(option, key=f"opt_{i}", use_container_width=True):
+            # زر مخفي للتفاعل مع Streamlit
+            if st.button(option, key=f"opt_btn_{i}", use_container_width=True, 
+                        disabled=st.session_state.waiting_for_next):
                 if not st.session_state.waiting_for_next and not st.session_state.game_over:
                     check_answer(i)
                     st.rerun()
+        
         st.markdown('</div>', unsafe_allow_html=True)
     
     # زر التالي
     if st.session_state.show_result and not st.session_state.game_over and st.session_state.waiting_for_next:
-        if st.button("➡️ السؤال التالي", use_container_width=True):
+        if st.button("➡️ السؤال التالي", use_container_width=True, key="next_btn"):
             start_round()
             st.rerun()
     
