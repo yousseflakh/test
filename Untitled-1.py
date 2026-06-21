@@ -4,6 +4,7 @@ import os
 import json
 import urllib.request
 import time
+import threading
 
 # محاولة استيراد مكتبات اللغة العربية مع معالجة الأخطاء
 try:
@@ -11,16 +12,13 @@ try:
     ARABIC_SUPPORT = True
 except ImportError:
     ARABIC_SUPPORT = False
-    print("Warning: arabic_reshaper not installed. Arabic text will not be reshaped.")
 
 try:
     from bidi.algorithm import get_display
     BIDI_SUPPORT = True
 except ImportError:
     BIDI_SUPPORT = False
-    print("Warning: python-bidi not installed. Arabic text will not be displayed correctly.")
 
-# دالة معالجة النص العربي مع التعامل مع الأخطاء
 def fix_arabic_text(text):
     if not ARABIC_SUPPORT or not BIDI_SUPPORT:
         return text
@@ -37,7 +35,6 @@ def fix_arabic_text(text):
 FILE = "words.txt"
 SCORE_FILE = "highscore.txt"
 
-# الكلمات الافتراضية
 DEFAULT_WORDS = [
     {"q": "House", "a": "Maison"},
     {"q": "Book", "a": "Livre"},
@@ -54,7 +51,6 @@ LANGUAGES = {
     "German": "de"
 }
 
-# دوال المساعدة
 def load_words():
     if not os.path.exists(FILE):
         return DEFAULT_WORDS
@@ -111,8 +107,6 @@ if 'round_active' not in st.session_state:
     st.session_state.round_active = False
 if 'words_db' not in st.session_state:
     st.session_state.words_db = load_words()
-if 'player_pos' not in st.session_state:
-    st.session_state.player_pos = 1
 if 'options' not in st.session_state:
     st.session_state.options = []
 if 'correct_ans' not in st.session_state:
@@ -133,8 +127,15 @@ if 'translation' not in st.session_state:
     st.session_state.translation = ""
 if 'word_to_edit' not in st.session_state:
     st.session_state.word_to_edit = None
+if 'options_y_positions' not in st.session_state:
+    st.session_state.options_y_positions = [0, 0, 0]
+if 'option_colors' not in st.session_state:
+    st.session_state.option_colors = ["#ffcc00", "#ffcc00", "#ffcc00"]
+if 'round_start_time' not in st.session_state:
+    st.session_state.round_start_time = 0
+if 'waiting_for_next_round' not in st.session_state:
+    st.session_state.waiting_for_next_round = False
 
-# دوال اللعبة
 def reset_game_stats():
     st.session_state.score = 0
     st.session_state.lives = 3
@@ -142,6 +143,9 @@ def reset_game_stats():
     st.session_state.game_active = True
     st.session_state.round_active = False
     st.session_state.options = []
+    st.session_state.options_y_positions = [0, 0, 0]
+    st.session_state.option_colors = ["#ffcc00", "#ffcc00", "#ffcc00"]
+    st.session_state.waiting_for_next_round = False
 
 def restart_game():
     reset_game_stats()
@@ -157,6 +161,7 @@ def start_round():
         return
     
     st.session_state.round_active = True
+    st.session_state.waiting_for_next_round = False
     target = random.choice(st.session_state.words_db)
     
     st.session_state.question_text = fix_arabic_text(target['q'])
@@ -170,26 +175,40 @@ def start_round():
     random.shuffle(opts)
     
     st.session_state.options = [fix_arabic_text(opt) for opt in opts]
+    st.session_state.options_y_positions = [0, 0, 0]
+    st.session_state.option_colors = ["#ffcc00", "#ffcc00", "#ffcc00"]
+    st.session_state.round_start_time = time.time()
 
 def check_answer(choice_index):
-    if not st.session_state.game_active or not st.session_state.round_active:
+    if not st.session_state.game_active or not st.session_state.round_active or st.session_state.waiting_for_next_round:
         return
     
     st.session_state.round_active = False
+    st.session_state.waiting_for_next_round = True
     
-    if st.session_state.options[choice_index] == fix_arabic_text(st.session_state.correct_ans):
+    # تحديد الخيار الصحيح
+    correct_index = st.session_state.options.index(fix_arabic_text(st.session_state.correct_ans))
+    
+    # تغيير الألوان
+    st.session_state.option_colors = ["#ffcc00", "#ffcc00", "#ffcc00"]
+    if choice_index == correct_index:
         st.session_state.score += 10
-        st.success("✅ Correct!")
+        st.session_state.option_colors[choice_index] = "#00ff00"  # أخضر للصحيح
     else:
         st.session_state.lives -= 1
-        st.error(f"❌ Wrong! Correct answer: {fix_arabic_text(st.session_state.correct_ans)}")
+        st.session_state.option_colors[choice_index] = "#ff0000"  # أحمر للخطأ
+        st.session_state.option_colors[correct_index] = "#00ff00"  # أخضر للصحيح
     
+    # حفظ النتيجة العالية
     if st.session_state.lives <= 0:
         save_high_score(st.session_state.score)
         st.session_state.game_over = True
-    else:
-        time.sleep(1)
+    
+    # بدء الجولة التالية بعد تأخير
+    time.sleep(1.5)
+    if st.session_state.lives > 0:
         start_round()
+    st.rerun()
 
 def go_to_dict():
     st.session_state.page = 'dict'
@@ -251,7 +270,7 @@ def save_word(q, a):
     st.session_state.edit_mode = False
     return True
 
-# CSS للتنسيق
+# CSS
 st.markdown("""
 <style>
     .main {
@@ -268,69 +287,63 @@ st.markdown("""
         border: 1px solid rgba(0, 255, 200, 0.2);
         box-shadow: 0 0 30px rgba(0, 255, 200, 0.1);
     }
-    .score-lives {
-        display: flex;
-        justify-content: space-between;
-        padding: 10px 15px;
-        margin-bottom: 20px;
-    }
     .score-text {
         color: #00ffcc;
         font-size: 20px;
         font-weight: bold;
         text-shadow: 0 0 10px rgba(0, 255, 200, 0.5);
+        display: inline-block;
     }
     .lives-text {
         color: #ff3366;
         font-size: 20px;
         font-weight: bold;
         text-shadow: 0 0 10px rgba(255, 51, 102, 0.5);
+        display: inline-block;
+        float: right;
     }
     .question-box {
         background: rgba(20, 20, 50, 0.6);
         border-radius: 15px;
-        padding: 20px;
+        padding: 25px;
         margin: 20px 0;
         text-align: center;
         border: 1px solid rgba(0, 255, 200, 0.1);
+        min-height: 100px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
     .question-text {
         color: white;
         font-size: 38px;
         font-weight: bold;
         text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+        margin: 0;
     }
     .options-container {
         display: flex;
         flex-direction: column;
-        gap: 12px;
-        margin: 25px 0;
+        gap: 15px;
+        margin: 30px 0;
     }
     .option-btn {
         background: rgba(30, 30, 80, 0.6);
-        color: #ffcc00;
-        border: 1px solid rgba(255, 204, 0, 0.3);
+        border: 2px solid rgba(255, 204, 0, 0.3);
         border-radius: 12px;
-        padding: 15px;
+        padding: 18px;
         font-size: 24px;
         font-weight: bold;
         width: 100%;
         transition: all 0.3s ease;
         cursor: pointer;
         text-align: center;
+        color: #ffcc00;
     }
     .option-btn:hover {
         background: rgba(0, 255, 200, 0.1);
         border-color: #00ffcc;
         transform: scale(1.02);
-    }
-    .player-indicator {
-        text-align: center;
-        color: #00ffcc;
-        font-size: 28px;
-        padding: 15px;
-        text-shadow: 0 0 20px rgba(0, 255, 200, 0.5);
-        margin: 20px 0;
     }
     .game-over-box {
         background: rgba(20, 20, 50, 0.95);
@@ -370,27 +383,6 @@ st.markdown("""
         font-size: 16px;
         flex: 1;
     }
-    .edit-btn, .delete-btn {
-        background: transparent;
-        border: none;
-        padding: 5px 12px;
-        border-radius: 8px;
-        font-weight: bold;
-        cursor: pointer;
-        margin: 0 3px;
-    }
-    .edit-btn {
-        color: #ffcc00;
-    }
-    .edit-btn:hover {
-        background: rgba(255, 204, 0, 0.1);
-    }
-    .delete-btn {
-        color: #ff3333;
-    }
-    .delete-btn:hover {
-        background: rgba(255, 51, 51, 0.1);
-    }
     .edit-container {
         background: rgba(10, 10, 30, 0.8);
         border-radius: 20px;
@@ -428,38 +420,71 @@ st.markdown("""
         border: 1px solid rgba(0, 255, 200, 0.3);
         border-radius: 10px;
     }
+    .falling-animation {
+        animation: fall 3s linear;
+    }
+    @keyframes fall {
+        0% { transform: translateY(0px); opacity: 1; }
+        100% { transform: translateY(600px); opacity: 0; }
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# عرض تحذير إذا كانت مكتبات اللغة العربية غير مثبتة
+# عرض تحذير
 if not ARABIC_SUPPORT or not BIDI_SUPPORT:
-    st.warning("⚠️ Arabic text support libraries are not installed. Arabic text may not display correctly. To fix: pip install arabic_reshaper python-bidi")
+    st.warning("⚠️ Arabic text support libraries not installed. Install with: pip install arabic_reshaper python-bidi")
 
 # الصفحات
 if st.session_state.page == 'game':
     st.markdown('<div class="game-container">', unsafe_allow_html=True)
     
+    # عرض النقاط والحيوات
     col1, col2 = st.columns([1, 1])
     with col1:
-        st.markdown(f'<div class="score-text">🏆 Score: {st.session_state.score}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="score-text">🏆 {st.session_state.score}</div>', unsafe_allow_html=True)
     with col2:
         lives_display = '❤' * max(0, st.session_state.lives)
-        st.markdown(f'<div class="lives-text" style="text-align:right;">{lives_display}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="lives-text">{lives_display}</div>', unsafe_allow_html=True)
     
+    # السؤال
     st.markdown('<div class="question-box">', unsafe_allow_html=True)
     st.markdown(f'<div class="question-text">{st.session_state.question_text}</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
     
-    if st.session_state.options and not st.session_state.game_over:
+    # الخيارات - اللعبة الأساسية
+    if st.session_state.options and not st.session_state.game_over and not st.session_state.waiting_for_next_round:
         st.markdown('<div class="options-container">', unsafe_allow_html=True)
         for i, option in enumerate(st.session_state.options):
+            color = st.session_state.option_colors[i] if i < len(st.session_state.option_colors) else "#ffcc00"
+            button_style = f"""
+            <style>
+                .option-btn-{i} {{
+                    background: rgba(30, 30, 80, 0.6);
+                    border: 2px solid {color};
+                    border-radius: 12px;
+                    padding: 18px;
+                    font-size: 24px;
+                    font-weight: bold;
+                    width: 100%;
+                    text-align: center;
+                    color: {color};
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                }}
+                .option-btn-{i}:hover {{
+                    background: rgba(0, 255, 200, 0.1);
+                    transform: scale(1.02);
+                }}
+            </style>
+            """
+            st.markdown(button_style, unsafe_allow_html=True)
+            
             if st.button(option, key=f"opt_{i}", use_container_width=True):
                 check_answer(i)
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
     
-    st.markdown(f'<div class="player-indicator">◄ {["◄", "■", "►"][st.session_state.player_pos]} ►</div>', unsafe_allow_html=True)
-    
+    # شاشة Game Over
     if st.session_state.game_over:
         st.markdown('<div class="game-over-box">', unsafe_allow_html=True)
         st.markdown('<div class="game-over-title">💀 GAME OVER</div>', unsafe_allow_html=True)
@@ -476,19 +501,18 @@ if st.session_state.page == 'game':
         
         st.markdown('</div>', unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1, 1, 1])
+    # أزرار التحكم
+    st.markdown("---")
+    col1, col2, col3 = st.columns(3)
     with col1:
-        if st.button("◄ Left", use_container_width=True):
-            st.session_state.player_pos = 0
-            st.rerun()
+        if st.button("◄", use_container_width=True):
+            pass
     with col2:
-        if st.button("■ Center", use_container_width=True):
-            st.session_state.player_pos = 1
-            st.rerun()
+        if st.button("■", use_container_width=True):
+            pass
     with col3:
-        if st.button("Right ►", use_container_width=True):
-            st.session_state.player_pos = 2
-            st.rerun()
+        if st.button("►", use_container_width=True):
+            pass
     
     if st.button("⚙ Dictionary", use_container_width=True):
         go_to_dict()
@@ -503,21 +527,19 @@ elif st.session_state.page == 'dict':
     
     words = load_words()
     for i, word in enumerate(words):
-        col1, col2 = st.columns([3, 1])
+        col1, col2, col3 = st.columns([3, 1, 1])
         with col1:
             st.markdown(f'<div class="word-text">{fix_arabic_text(word["q"])} ＝ {fix_arabic_text(word["a"])}</div>', unsafe_allow_html=True)
         with col2:
-            edit_col, del_col = st.columns([1, 1])
-            with edit_col:
-                if st.button(f"✏️", key=f"edit_{i}", use_container_width=True):
-                    open_edit(i)
-                    st.rerun()
-            with del_col:
-                if st.button(f"🗑️", key=f"del_{i}", use_container_width=True):
-                    delete_word(i)
-                    st.rerun()
+            if st.button("✏️", key=f"edit_{i}", use_container_width=True):
+                open_edit(i)
+                st.rerun()
+        with col3:
+            if st.button("🗑️", key=f"del_{i}", use_container_width=True):
+                delete_word(i)
+                st.rerun()
     
-    col1, col2 = st.columns([1, 1])
+    col1, col2 = st.columns(2)
     with col1:
         if st.button("➕ Add Word", use_container_width=True):
             open_edit(-1)
@@ -534,40 +556,50 @@ elif st.session_state.page == 'edit':
     
     st.markdown('<div style="text-align:center;color:#00ffcc;font-size:26px;font-weight:bold;margin-bottom:20px;">✏️ EDIT WORD</div>', unsafe_allow_html=True)
     
+    # اختيار اللغات
     col1, col2, col3 = st.columns([1, 0.5, 1])
     with col1:
-        src_lang = st.selectbox("From", list(LANGUAGES.keys()), index=list(LANGUAGES.keys()).index(st.session_state.src_lang))
+        src_lang = st.selectbox("From", list(LANGUAGES.keys()), 
+                               index=list(LANGUAGES.keys()).index(st.session_state.src_lang))
         st.session_state.src_lang = src_lang
     with col2:
         st.markdown('<div style="text-align:center;padding-top:25px;color:#00ffcc;font-size:20px;">➔</div>', unsafe_allow_html=True)
     with col3:
-        target_lang = st.selectbox("To", list(LANGUAGES.keys()), index=list(LANGUAGES.keys()).index(st.session_state.target_lang))
+        target_lang = st.selectbox("To", list(LANGUAGES.keys()), 
+                                  index=list(LANGUAGES.keys()).index(st.session_state.target_lang))
         st.session_state.target_lang = target_lang
     
+    # حقول الإدخال
     if st.session_state.selected_word:
         q = st.text_input("Word", value=st.session_state.selected_word.get('q', ''))
-        a = st.text_area("Translation", value=st.session_state.selected_word.get('a', ''))
+        a = st.text_area("Translation", value=st.session_state.selected_word.get('a', ''), height=100)
     else:
         q = st.text_input("Word", value="")
-        a = st.text_area("Translation", value="")
+        a = st.text_area("Translation", value="", height=100)
     
+    # زر الترجمة التلقائية
     if st.button("✨ Auto-Translate", use_container_width=True):
         if q.strip():
-            translated = translate_text(q, st.session_state.src_lang, st.session_state.target_lang)
-            a = translated
-            st.session_state.translation = translated
-            st.rerun()
+            with st.spinner("Translating..."):
+                translated = translate_text(q, st.session_state.src_lang, st.session_state.target_lang)
+                if translated:
+                    st.session_state.translation = translated
+                    # تحديث الحقل
+                    st.session_state.selected_word = {"q": q, "a": translated}
+                    st.rerun()
+        else:
+            st.warning("Please enter a word to translate!")
     
-    col1, col2 = st.columns([1, 1])
+    # أزرار الحفظ والإلغاء
+    col1, col2 = st.columns(2)
     with col1:
-        if st.button("💾 Save Word", use_container_width=True):
+        if st.button("💾 Save", use_container_width=True):
             if save_word(q, a):
-                st.success("✅ Word saved successfully!")
-                time.sleep(1)
+                st.success("✅ Saved!")
+                time.sleep(0.5)
                 st.rerun()
             else:
                 st.error("❌ Please fill both fields!")
-    
     with col2:
         if st.button("❌ Cancel", use_container_width=True):
             st.session_state.page = 'dict'
@@ -577,6 +609,6 @@ elif st.session_state.page == 'edit':
     st.markdown('</div>', unsafe_allow_html=True)
 
 # بدء اللعبة
-if st.session_state.page == 'game' and not st.session_state.options and not st.session_state.game_over:
+if st.session_state.page == 'game' and not st.session_state.options and not st.session_state.game_over and not st.session_state.waiting_for_next_round:
     start_round()
     st.rerun()
