@@ -100,8 +100,6 @@ if 'score' not in st.session_state:
     st.session_state.score = 0
 if 'lives' not in st.session_state:
     st.session_state.lives = 3
-if 'game_active' not in st.session_state:
-    st.session_state.game_active = True
 if 'words_db' not in st.session_state:
     st.session_state.words_db = load_words()
 if 'question_text' not in st.session_state:
@@ -126,27 +124,23 @@ if 'option_colors' not in st.session_state:
     st.session_state.option_colors = ["#ffcc00", "#ffcc00", "#ffcc00"]
 if 'waiting_for_next' not in st.session_state:
     st.session_state.waiting_for_next = False
-if 'message' not in st.session_state:
-    st.session_state.message = ""
 if 'show_result' not in st.session_state:
     st.session_state.show_result = False
+if 'round_started' not in st.session_state:
+    st.session_state.round_started = False
 
 def reset_game():
     st.session_state.score = 0
     st.session_state.lives = 3
     st.session_state.game_over = False
-    st.session_state.game_active = True
     st.session_state.options = []
     st.session_state.option_colors = ["#ffcc00", "#ffcc00", "#ffcc00"]
     st.session_state.waiting_for_next = False
-    st.session_state.message = ""
     st.session_state.show_result = False
+    st.session_state.round_started = False
     start_round()
 
 def start_round():
-    if not st.session_state.game_active:
-        return
-    
     if st.session_state.lives <= 0:
         save_high_score(st.session_state.score)
         st.session_state.game_over = True
@@ -157,20 +151,21 @@ def start_round():
     st.session_state.question_text = fix_arabic_text(target['q'])
     st.session_state.correct_ans = target['a']
     
-    # اختيار 3 خيارات
+    # اختيار 3 خيارات (واحد صحيح واثنين خاطئين)
     opts = [st.session_state.correct_ans]
     temp_words = [w for w in st.session_state.words_db if w['a'] != st.session_state.correct_ans]
-    if temp_words:
-        while len(opts) < 3 and temp_words:
-            w = random.choice(temp_words)['a']
-            if w not in opts:
-                opts.append(w)
-            temp_words.remove(w)
     
-    # إذا لم يكن هناك 3 خيارات، أضف خيارات عشوائية
-    while len(opts) < 3:
-        fake = f"Option {len(opts)+1}"
-        if fake not in opts:
+    # إضافة خيارات عشوائية
+    random.shuffle(temp_words)
+    for w in temp_words:
+        if len(opts) < 3:
+            if w['a'] not in opts:
+                opts.append(w['a'])
+    
+    # إذا لم يكن هناك 3 خيارات، أضف خيارات وهمية
+    fake_options = ["Option X", "Option Y", "Option Z"]
+    for fake in fake_options:
+        if len(opts) < 3 and fake not in opts:
             opts.append(fake)
     
     random.shuffle(opts)
@@ -178,26 +173,34 @@ def start_round():
     st.session_state.option_colors = ["#ffcc00", "#ffcc00", "#ffcc00"]
     st.session_state.waiting_for_next = False
     st.session_state.show_result = False
-    st.session_state.message = ""
+    st.session_state.round_started = True
 
 def check_answer(choice_index):
     if st.session_state.waiting_for_next or st.session_state.game_over:
         return
     
     st.session_state.waiting_for_next = True
-    correct_index = st.session_state.options.index(fix_arabic_text(st.session_state.correct_ans))
+    
+    # العثور على الخيار الصحيح
+    correct_index = -1
+    for i, opt in enumerate(st.session_state.options):
+        if opt == fix_arabic_text(st.session_state.correct_ans):
+            correct_index = i
+            break
     
     # تغيير الألوان
     st.session_state.option_colors = ["#ffcc00", "#ffcc00", "#ffcc00"]
+    
     if choice_index == correct_index:
         st.session_state.score += 10
-        st.session_state.option_colors[choice_index] = "#00ff00"
-        st.session_state.message = "✅ Correct!"
+        st.session_state.option_colors[choice_index] = "#00ff00"  # أخضر
+        st.session_state.message = "✅ صحيح!"
     else:
         st.session_state.lives -= 1
-        st.session_state.option_colors[choice_index] = "#ff0000"
-        st.session_state.option_colors[correct_index] = "#00ff00"
-        st.session_state.message = f"❌ Wrong! Answer: {fix_arabic_text(st.session_state.correct_ans)}"
+        st.session_state.option_colors[choice_index] = "#ff0000"  # أحمر
+        if correct_index != -1:
+            st.session_state.option_colors[correct_index] = "#00ff00"  # أخضر للصحيح
+        st.session_state.message = f"❌ خطأ! الإجابة: {fix_arabic_text(st.session_state.correct_ans)}"
     
     st.session_state.show_result = True
     
@@ -244,7 +247,7 @@ def translate_text(text, src, target):
         data = json.loads(response.read().decode('utf-8'))
         return data[0][0][0]
     except Exception as e:
-        return "⚠️ Translation error!"
+        return "⚠️ خطأ في الترجمة!"
 
 def save_word(q, a):
     if not q.strip() or not a.strip():
@@ -429,7 +432,7 @@ st.markdown("""
     }
     .message-box {
         text-align: center;
-        padding: 10px;
+        padding: 15px;
         margin: 10px 0;
         font-size: 20px;
         font-weight: bold;
@@ -437,27 +440,29 @@ st.markdown("""
     }
     .success {
         color: #00ff00;
+        background: rgba(0, 255, 0, 0.1);
+        border: 1px solid #00ff00;
     }
     .error {
         color: #ff3333;
+        background: rgba(255, 0, 0, 0.1);
+        border: 1px solid #ff3333;
     }
-    .stAlert {
-        background: rgba(20, 20, 50, 0.8);
-        border: 1px solid rgba(0, 255, 200, 0.2);
-        border-radius: 10px;
+    .next-btn {
+        margin-top: 20px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# عرض تحذير
+# تحذير المكتبات
 if not ARABIC_SUPPORT or not BIDI_SUPPORT:
-    st.warning("⚠️ Arabic text support not fully available. Install: pip install arabic_reshaper python-bidi")
+    st.warning("⚠️ دعم اللغة العربية غير مكتمل. للتثبيت: pip install arabic_reshaper python-bidi")
 
 # الصفحات
 if st.session_state.page == 'game':
     st.markdown('<div class="game-container">', unsafe_allow_html=True)
     
-    # الرأس: النقاط والحيوات
+    # الرأس
     st.markdown('<div class="header">', unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
@@ -473,20 +478,20 @@ if st.session_state.page == 'game':
     st.markdown('</div>', unsafe_allow_html=True)
     
     # عرض الرسالة
-    if st.session_state.message and st.session_state.show_result:
+    if st.session_state.show_result and hasattr(st.session_state, 'message'):
         if "✅" in st.session_state.message:
             st.markdown(f'<div class="message-box success">{st.session_state.message}</div>', unsafe_allow_html=True)
         else:
             st.markdown(f'<div class="message-box error">{st.session_state.message}</div>', unsafe_allow_html=True)
     
-    # الخيارات
-    if st.session_state.options and not st.session_state.game_over:
+    # الخيارات - اللعبة الأساسية
+    if st.session_state.options and not st.session_state.game_over and not st.session_state.waiting_for_next:
         st.markdown('<div class="options-container">', unsafe_allow_html=True)
         for i, option in enumerate(st.session_state.options):
             color = st.session_state.option_colors[i] if i < len(st.session_state.option_colors) else "#ffcc00"
             
-            # زر مخصص مع لون
-            button_html = f'''
+            # زر مخصص
+            button_style = f'''
             <style>
                 .opt-btn-{i} {{
                     background: rgba(30, 30, 80, 0.7);
@@ -507,7 +512,7 @@ if st.session_state.page == 'game':
                 }}
             </style>
             '''
-            st.markdown(button_html, unsafe_allow_html=True)
+            st.markdown(button_style, unsafe_allow_html=True)
             
             if st.button(option, key=f"opt_{i}", use_container_width=True):
                 if not st.session_state.waiting_for_next and not st.session_state.game_over:
@@ -515,34 +520,34 @@ if st.session_state.page == 'game':
                     st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # أزرار الإنتقال إلى الجولة التالية أو إعادة اللعب
-    if st.session_state.show_result and not st.session_state.game_over:
-        if st.button("➡️ Next Question", use_container_width=True):
+    # زر التالي
+    if st.session_state.show_result and not st.session_state.game_over and st.session_state.waiting_for_next:
+        if st.button("➡️ السؤال التالي", use_container_width=True):
             start_round()
             st.rerun()
     
     # شاشة Game Over
     if st.session_state.game_over:
         st.markdown('<div class="game-over-box">', unsafe_allow_html=True)
-        st.markdown('<div class="game-over-title">💀 GAME OVER</div>', unsafe_allow_html=True)
-        st.markdown(f'<div style="color:white;font-size:28px;margin:15px 0;">Score: {st.session_state.score}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div style="color:#00ffcc;font-size:22px;margin:15px 0;">🏆 Best: {get_high_score()}</div>', unsafe_allow_html=True)
+        st.markdown('<div class="game-over-title">💀 انتهت اللعبة</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="color:white;font-size:28px;margin:15px 0;">النقاط: {st.session_state.score}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="color:#00ffcc;font-size:22px;margin:15px 0;">🏆 أفضل: {get_high_score()}</div>', unsafe_allow_html=True)
         
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("🔄 Play Again", use_container_width=True):
+            if st.button("🔄 العب مجدداً", use_container_width=True):
                 reset_game()
                 st.rerun()
         with col2:
-            if st.button("📚 Dictionary", use_container_width=True):
+            if st.button("📚 القاموس", use_container_width=True):
                 go_to_dict()
                 st.rerun()
         
         st.markdown('</div>', unsafe_allow_html=True)
     
     # زر القاموس
-    if not st.session_state.game_over:
-        if st.button("📚 Dictionary", use_container_width=True):
+    if not st.session_state.game_over and not st.session_state.show_result:
+        if st.button("📚 القاموس", use_container_width=True):
             go_to_dict()
             st.rerun()
     
@@ -551,9 +556,12 @@ if st.session_state.page == 'game':
 elif st.session_state.page == 'dict':
     st.markdown('<div class="dict-container">', unsafe_allow_html=True)
     
-    st.markdown('<div style="text-align:center;color:#00ffcc;font-size:28px;font-weight:bold;margin-bottom:25px;">📚 DICTIONARY</div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center;color:#00ffcc;font-size:28px;font-weight:bold;margin-bottom:25px;">📚 القاموس</div>', unsafe_allow_html=True)
     
     words = load_words()
+    if not words:
+        st.info("📝 لا توجد كلمات. أضف كلمات جديدة!")
+    
     for i, word in enumerate(words):
         col1, col2, col3 = st.columns([3, 1, 1])
         with col1:
@@ -570,11 +578,11 @@ elif st.session_state.page == 'dict':
     st.markdown("---")
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("➕ Add Word", use_container_width=True):
+        if st.button("➕ أضف كلمة", use_container_width=True):
             open_edit(-1)
             st.rerun()
     with col2:
-        if st.button("🎮 Play Game", use_container_width=True):
+        if st.button("🎮 العب", use_container_width=True):
             go_to_game()
             st.rerun()
     
@@ -583,59 +591,61 @@ elif st.session_state.page == 'dict':
 elif st.session_state.page == 'edit':
     st.markdown('<div class="edit-container">', unsafe_allow_html=True)
     
-    st.markdown('<div style="text-align:center;color:#00ffcc;font-size:28px;font-weight:bold;margin-bottom:25px;">✏️ EDIT WORD</div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center;color:#00ffcc;font-size:28px;font-weight:bold;margin-bottom:25px;">✏️ تعديل الكلمة</div>', unsafe_allow_html=True)
     
     # اختيار اللغات
     col1, col2, col3 = st.columns([1, 0.5, 1])
     with col1:
-        src_lang = st.selectbox("From", list(LANGUAGES.keys()), 
+        src_lang = st.selectbox("من", list(LANGUAGES.keys()), 
                                index=list(LANGUAGES.keys()).index(st.session_state.src_lang))
         st.session_state.src_lang = src_lang
     with col2:
         st.markdown('<div style="text-align:center;padding-top:25px;color:#00ffcc;font-size:24px;">➔</div>', unsafe_allow_html=True)
     with col3:
-        target_lang = st.selectbox("To", list(LANGUAGES.keys()), 
+        target_lang = st.selectbox("إلى", list(LANGUAGES.keys()), 
                                   index=list(LANGUAGES.keys()).index(st.session_state.target_lang))
         st.session_state.target_lang = target_lang
     
     # حقول الإدخال
     if st.session_state.selected_word:
-        q = st.text_input("Word", value=st.session_state.selected_word.get('q', ''), placeholder="Enter word...")
-        a = st.text_area("Translation", value=st.session_state.selected_word.get('a', ''), height=100, placeholder="Translation...")
+        q = st.text_input("الكلمة", value=st.session_state.selected_word.get('q', ''), placeholder="أدخل الكلمة...")
+        a = st.text_area("الترجمة", value=st.session_state.selected_word.get('a', ''), height=100, placeholder="الترجمة...")
     else:
-        q = st.text_input("Word", value="", placeholder="Enter word...")
-        a = st.text_area("Translation", value="", height=100, placeholder="Translation...")
+        q = st.text_input("الكلمة", value="", placeholder="أدخل الكلمة...")
+        a = st.text_area("الترجمة", value="", height=100, placeholder="الترجمة...")
     
     # الترجمة التلقائية
-    if st.button("✨ Auto-Translate", use_container_width=True):
+    if st.button("✨ ترجمة تلقائية", use_container_width=True):
         if q.strip():
-            with st.spinner("🔄 Translating..."):
+            with st.spinner("🔄 جاري الترجمة..."):
                 translated = translate_text(q, st.session_state.src_lang, st.session_state.target_lang)
-                if translated:
+                if translated and "خطأ" not in translated:
                     st.session_state.selected_word = {"q": q, "a": translated}
                     st.rerun()
+                else:
+                    st.error("⚠️ فشلت الترجمة! تأكد من الاتصال بالإنترنت.")
         else:
-            st.warning("⚠️ Please enter a word first!")
+            st.warning("⚠️ أدخل كلمة أولاً!")
     
     st.markdown("---")
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("💾 Save Word", use_container_width=True):
+        if st.button("💾 حفظ", use_container_width=True):
             if save_word(q, a):
-                st.success("✅ Word saved!")
+                st.success("✅ تم الحفظ!")
                 time.sleep(0.5)
                 st.rerun()
             else:
-                st.error("❌ Please fill both fields!")
+                st.error("❌ املأ كلا الحقلين!")
     with col2:
-        if st.button("❌ Cancel", use_container_width=True):
+        if st.button("❌ إلغاء", use_container_width=True):
             st.session_state.page = 'dict'
             st.session_state.edit_mode = False
             st.rerun()
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-# بدء اللعبة إذا لزم الأمر
-if st.session_state.page == 'game' and not st.session_state.options and not st.session_state.game_over and not st.session_state.show_result:
+# بدء الجولة الأولى
+if st.session_state.page == 'game' and not st.session_state.round_started and not st.session_state.game_over:
     start_round()
     st.rerun()
