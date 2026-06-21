@@ -3,9 +3,35 @@ import random
 import os
 import json
 import urllib.request
-import arabic_reshaper
-from bidi.algorithm import get_display
 import time
+
+# محاولة استيراد مكتبات اللغة العربية مع معالجة الأخطاء
+try:
+    import arabic_reshaper
+    ARABIC_SUPPORT = True
+except ImportError:
+    ARABIC_SUPPORT = False
+    print("Warning: arabic_reshaper not installed. Arabic text will not be reshaped.")
+
+try:
+    from bidi.algorithm import get_display
+    BIDI_SUPPORT = True
+except ImportError:
+    BIDI_SUPPORT = False
+    print("Warning: python-bidi not installed. Arabic text will not be displayed correctly.")
+
+# دالة معالجة النص العربي مع التعامل مع الأخطاء
+def fix_arabic_text(text):
+    if not ARABIC_SUPPORT or not BIDI_SUPPORT:
+        return text
+    try:
+        if any("\u0600" <= char <= "\u06FF" for char in text):
+            reshaped_text = arabic_reshaper.reshape(text)
+            bidi_text = get_display(reshaped_text)
+            return bidi_text
+    except Exception:
+        pass
+    return text
 
 # إعدادات الملفات
 FILE = "words.txt"
@@ -29,34 +55,30 @@ LANGUAGES = {
 }
 
 # دوال المساعدة
-def fix_arabic_text(text):
-    try:
-        if any("\u0600" <= char <= "\u06FF" for char in text):
-            reshaped_text = arabic_reshaper.reshape(text)
-            bidi_text = get_display(reshaped_text)
-            return bidi_text
-    except Exception:
-        pass
-    return text
-
 def load_words():
     if not os.path.exists(FILE):
         return DEFAULT_WORDS
     words = []
-    with open(FILE, "r", encoding="utf-8") as f:
-        for line in f:
-            if "," in line:
-                q, a = line.strip().split(",", 1)
-                if q.strip() and a.strip():
-                    words.append({"q": q.strip(), "a": a.strip()})
+    try:
+        with open(FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                if "," in line:
+                    q, a = line.strip().split(",", 1)
+                    if q.strip() and a.strip():
+                        words.append({"q": q.strip(), "a": a.strip()})
+    except:
+        return DEFAULT_WORDS
     if len(words) < 3:
         return DEFAULT_WORDS
     return words
 
 def save_words(words):
-    with open(FILE, "w", encoding="utf-8") as f:
-        for w in words:
-            f.write(f"{w['q']},{w['a']}\n")
+    try:
+        with open(FILE, "w", encoding="utf-8") as f:
+            for w in words:
+                f.write(f"{w['q']},{w['a']}\n")
+    except:
+        pass
 
 def get_high_score():
     if os.path.exists(SCORE_FILE):
@@ -70,8 +92,11 @@ def get_high_score():
 def save_high_score(score):
     current_high = get_high_score()
     if score > current_high:
-        with open(SCORE_FILE, "w") as f:
-            f.write(str(score))
+        try:
+            with open(SCORE_FILE, "w") as f:
+                f.write(str(score))
+        except:
+            pass
 
 # تهيئة حالة الجلسة
 if 'page' not in st.session_state:
@@ -87,7 +112,7 @@ if 'round_active' not in st.session_state:
 if 'words_db' not in st.session_state:
     st.session_state.words_db = load_words()
 if 'player_pos' not in st.session_state:
-    st.session_state.player_pos = 1  # 0=left, 1=mid, 2=right
+    st.session_state.player_pos = 1
 if 'options' not in st.session_state:
     st.session_state.options = []
 if 'correct_ans' not in st.session_state:
@@ -122,10 +147,6 @@ def restart_game():
     reset_game_stats()
     start_round()
 
-def update_ui():
-    # يتم التحديث تلقائياً في Streamlit
-    pass
-
 def start_round():
     if not st.session_state.game_active:
         return
@@ -156,20 +177,17 @@ def check_answer(choice_index):
     
     st.session_state.round_active = False
     
-    # التحقق من الإجابة
     if st.session_state.options[choice_index] == fix_arabic_text(st.session_state.correct_ans):
         st.session_state.score += 10
-        st.success("✅ صحيح!")
+        st.success("✅ Correct!")
     else:
         st.session_state.lives -= 1
-        st.error(f"❌ خطأ! الإجابة الصحيحة: {fix_arabic_text(st.session_state.correct_ans)}")
+        st.error(f"❌ Wrong! Correct answer: {fix_arabic_text(st.session_state.correct_ans)}")
     
-    # تحديث الحالة
     if st.session_state.lives <= 0:
         save_high_score(st.session_state.score)
         st.session_state.game_over = True
     else:
-        # بدء جولة جديدة بعد تأخير
         time.sleep(1)
         start_round()
 
@@ -413,11 +431,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# عرض تحذير إذا كانت مكتبات اللغة العربية غير مثبتة
+if not ARABIC_SUPPORT or not BIDI_SUPPORT:
+    st.warning("⚠️ Arabic text support libraries are not installed. Arabic text may not display correctly. To fix: pip install arabic_reshaper python-bidi")
+
 # الصفحات
 if st.session_state.page == 'game':
     st.markdown('<div class="game-container">', unsafe_allow_html=True)
     
-    # عرض اللعبة
     col1, col2 = st.columns([1, 1])
     with col1:
         st.markdown(f'<div class="score-text">🏆 Score: {st.session_state.score}</div>', unsafe_allow_html=True)
@@ -425,12 +446,10 @@ if st.session_state.page == 'game':
         lives_display = '❤' * max(0, st.session_state.lives)
         st.markdown(f'<div class="lives-text" style="text-align:right;">{lives_display}</div>', unsafe_allow_html=True)
     
-    # السؤال
     st.markdown('<div class="question-box">', unsafe_allow_html=True)
     st.markdown(f'<div class="question-text">{st.session_state.question_text}</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # الخيارات
     if st.session_state.options and not st.session_state.game_over:
         st.markdown('<div class="options-container">', unsafe_allow_html=True)
         for i, option in enumerate(st.session_state.options):
@@ -439,10 +458,8 @@ if st.session_state.page == 'game':
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # مؤشر اللاعب
     st.markdown(f'<div class="player-indicator">◄ {["◄", "■", "►"][st.session_state.player_pos]} ►</div>', unsafe_allow_html=True)
     
-    # شاشة Game Over
     if st.session_state.game_over:
         st.markdown('<div class="game-over-box">', unsafe_allow_html=True)
         st.markdown('<div class="game-over-title">💀 GAME OVER</div>', unsafe_allow_html=True)
@@ -459,7 +476,6 @@ if st.session_state.page == 'game':
         
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # أزرار التحكم
     col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
         if st.button("◄ Left", use_container_width=True):
@@ -485,30 +501,22 @@ elif st.session_state.page == 'dict':
     
     st.markdown('<div style="text-align:center;color:#00ffcc;font-size:26px;font-weight:bold;margin-bottom:20px;">📚 DICTIONARY</div>', unsafe_allow_html=True)
     
-    # عرض الكلمات
     words = load_words()
     for i, word in enumerate(words):
-        st.markdown(f'''
-        <div class="word-row">
-            <span class="word-text">{fix_arabic_text(word['q'])} ＝ {fix_arabic_text(word['a'])}</span>
-            <div>
-                <button class="edit-btn" onclick="alert('Edit function')">✏️</button>
-                <button class="delete-btn" onclick="alert('Delete function')">🗑️</button>
-            </div>
-        </div>
-        ''', unsafe_allow_html=True)
-        
-        col1, col2 = st.columns([1, 1])
+        col1, col2 = st.columns([3, 1])
         with col1:
-            if st.button(f"✏️ Edit", key=f"edit_{i}", use_container_width=True):
-                open_edit(i)
-                st.rerun()
+            st.markdown(f'<div class="word-text">{fix_arabic_text(word["q"])} ＝ {fix_arabic_text(word["a"])}</div>', unsafe_allow_html=True)
         with col2:
-            if st.button(f"🗑️ Delete", key=f"del_{i}", use_container_width=True):
-                delete_word(i)
-                st.rerun()
+            edit_col, del_col = st.columns([1, 1])
+            with edit_col:
+                if st.button(f"✏️", key=f"edit_{i}", use_container_width=True):
+                    open_edit(i)
+                    st.rerun()
+            with del_col:
+                if st.button(f"🗑️", key=f"del_{i}", use_container_width=True):
+                    delete_word(i)
+                    st.rerun()
     
-    # أزرار
     col1, col2 = st.columns([1, 1])
     with col1:
         if st.button("➕ Add Word", use_container_width=True):
@@ -526,7 +534,6 @@ elif st.session_state.page == 'edit':
     
     st.markdown('<div style="text-align:center;color:#00ffcc;font-size:26px;font-weight:bold;margin-bottom:20px;">✏️ EDIT WORD</div>', unsafe_allow_html=True)
     
-    # اختيار اللغات
     col1, col2, col3 = st.columns([1, 0.5, 1])
     with col1:
         src_lang = st.selectbox("From", list(LANGUAGES.keys()), index=list(LANGUAGES.keys()).index(st.session_state.src_lang))
@@ -537,7 +544,6 @@ elif st.session_state.page == 'edit':
         target_lang = st.selectbox("To", list(LANGUAGES.keys()), index=list(LANGUAGES.keys()).index(st.session_state.target_lang))
         st.session_state.target_lang = target_lang
     
-    # إدخال الكلمة
     if st.session_state.selected_word:
         q = st.text_input("Word", value=st.session_state.selected_word.get('q', ''))
         a = st.text_area("Translation", value=st.session_state.selected_word.get('a', ''))
@@ -545,7 +551,6 @@ elif st.session_state.page == 'edit':
         q = st.text_input("Word", value="")
         a = st.text_area("Translation", value="")
     
-    # زر الترجمة التلقائية
     if st.button("✨ Auto-Translate", use_container_width=True):
         if q.strip():
             translated = translate_text(q, st.session_state.src_lang, st.session_state.target_lang)
@@ -553,7 +558,6 @@ elif st.session_state.page == 'edit':
             st.session_state.translation = translated
             st.rerun()
     
-    # أزرار الحفظ والإلغاء
     col1, col2 = st.columns([1, 1])
     with col1:
         if st.button("💾 Save Word", use_container_width=True):
@@ -572,7 +576,7 @@ elif st.session_state.page == 'edit':
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-# بدء اللعبة إذا لم تكن نشطة
+# بدء اللعبة
 if st.session_state.page == 'game' and not st.session_state.options and not st.session_state.game_over:
     start_round()
     st.rerun()
