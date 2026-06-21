@@ -3,7 +3,6 @@ import random
 import os
 import json
 import urllib.request
-import time
 
 # محاولة استيراد مكتبات اللغة العربية
 try:
@@ -98,7 +97,7 @@ def save_high_score(score):
         except:
             pass
 
-# تهيئة حالة الجلسة
+# تهيئة حالة الجلسة - تم حذف المسافات الزائدة
 if 'page' not in st.session_state:
     st.session_state.page = 'game'
 if 'score' not in st.session_state:
@@ -284,237 +283,306 @@ def save_word(q, a):
     st.session_state.edit_mode = False
     return True
 
-# CSS
+# CSS محسّن - تم حذف المسافات الزائدة تماماً
 st.markdown("""
 <style>
-    /* إزالة المسافات الزائدة */
+    /* إزالة جميع المسافات الزائدة */
     .main > div {
-        padding-top: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
     }
     .block-container {
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
         max-width: 100% !important;
     }
     .stApp {
-        margin-top: -20px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    .stApp > header {
+        display: none !important;
     }
     
+    /* تنسيق عام */
     .game-container {
-        background: rgba(10, 10, 30, 0.95);
-        border-radius: 15px;
-        padding: 12px;
-        margin: 0 auto;
-        max-width: 450px;
-        min-height: 580px;
-        border: 1px solid rgba(0, 255, 200, 0.15);
-        box-shadow: 0 0 30px rgba(0, 255, 200, 0.05);
+        background: linear-gradient(135deg, #0a0a1a, #1a1a3e);
+        border-radius: 0;
+        padding: 15px;
+        margin: 0;
+        min-height: 100vh;
+        border: none;
+        box-shadow: none;
     }
-    .header {
+    
+    /* رأس اللعبة */
+    .game-header {
         display: flex;
         justify-content: space-between;
-        padding: 4px 4px 8px 4px;
+        align-items: center;
+        padding: 10px 5px 15px 5px;
+        border-bottom: 1px solid rgba(0, 255, 200, 0.1);
+        margin-bottom: 15px;
     }
-    .score-text {
+    .score-section {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+    .score-item {
         color: #00ffcc;
-        font-size: 16px;
+        font-size: 18px;
         font-weight: bold;
-        text-shadow: 0 0 15px rgba(0, 255, 200, 0.3);
+        text-shadow: 0 0 20px rgba(0, 255, 200, 0.3);
     }
-    .lives-text {
+    .lives-item {
         color: #ff3366;
-        font-size: 16px;
+        font-size: 20px;
         font-weight: bold;
-        text-shadow: 0 0 15px rgba(255, 51, 102, 0.3);
+        text-shadow: 0 0 20px rgba(255, 51, 102, 0.3);
     }
+    
+    /* بطاقات اللعبة */
     .game-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 8px;
-        margin: 6px 0;
+        gap: 10px;
+        margin: 10px 0;
     }
     .card {
-        background: rgba(30, 30, 80, 0.7);
+        background: linear-gradient(135deg, rgba(30, 30, 80, 0.8), rgba(20, 20, 60, 0.9));
         border: 2px solid rgba(0, 255, 200, 0.15);
-        border-radius: 10px;
-        padding: 18px 8px;
+        border-radius: 12px;
+        padding: 20px 10px;
         text-align: center;
         cursor: pointer;
-        transition: all 0.2s ease;
-        min-height: 70px;
+        transition: all 0.3s ease;
+        min-height: 80px;
         display: flex;
         align-items: center;
         justify-content: center;
         color: white;
         font-size: 16px;
         font-weight: bold;
+        position: relative;
+        overflow: hidden;
     }
     .card:hover {
-        transform: scale(1.02);
+        transform: translateY(-3px);
         border-color: #00ffcc;
-        box-shadow: 0 0 20px rgba(0, 255, 200, 0.15);
+        box-shadow: 0 10px 30px rgba(0, 255, 200, 0.15);
+    }
+    .card:active {
+        transform: scale(0.95);
     }
     .card.matched {
-        background: rgba(0, 255, 200, 0.1);
+        background: linear-gradient(135deg, rgba(0, 255, 200, 0.1), rgba(0, 200, 150, 0.05));
         border-color: #00ffcc;
-        opacity: 0.5;
+        opacity: 0.6;
         cursor: default;
+        transform: none !important;
     }
-    .card.matched:hover {
-        transform: none;
-        box-shadow: none;
+    .card.matched::after {
+        content: '✓';
+        position: absolute;
+        top: 5px;
+        right: 10px;
+        color: #00ffcc;
+        font-size: 18px;
     }
     .card.selected {
         border-color: #ffcc00;
-        box-shadow: 0 0 20px rgba(255, 204, 0, 0.2);
-        transform: scale(1.03);
+        box-shadow: 0 0 30px rgba(255, 204, 0, 0.2);
+        transform: scale(1.05);
     }
+    .card.selected::before {
+        content: '';
+        position: absolute;
+        top: -2px;
+        left: -2px;
+        right: -2px;
+        bottom: -2px;
+        background: linear-gradient(45deg, #ffcc00, transparent, #ffcc00);
+        border-radius: 14px;
+        z-index: -1;
+        animation: borderGlow 1.5s linear infinite;
+    }
+    @keyframes borderGlow {
+        0% { opacity: 0.3; }
+        50% { opacity: 0.8; }
+        100% { opacity: 0.3; }
+    }
+    
+    /* الرسائل */
     .message-box {
         text-align: center;
-        padding: 8px;
-        margin: 4px 0;
-        font-size: 16px;
-        font-weight: bold;
-        border-radius: 8px;
-    }
-    .success {
-        color: #00ff00;
-        background: rgba(0, 255, 0, 0.08);
-        border: 1px solid #00ff00;
-    }
-    .error {
-        color: #ff3333;
-        background: rgba(255, 0, 0, 0.08);
-        border: 1px solid #ff3333;
-    }
-    .game-over-box {
-        background: rgba(20, 20, 50, 0.95);
-        border-radius: 15px;
-        padding: 20px;
+        padding: 12px;
         margin: 10px 0;
-        border: 2px solid rgba(255, 51, 51, 0.2);
-        text-align: center;
-    }
-    .game-over-title {
-        color: #ff3333;
-        font-size: 26px;
-        font-weight: bold;
-        text-shadow: 0 0 20px rgba(255, 51, 51, 0.3);
-    }
-    .stats-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 6px;
-        margin: 10px 0;
-    }
-    .stat-item {
-        background: rgba(20, 20, 50, 0.5);
-        padding: 8px;
-        border-radius: 8px;
-        text-align: center;
-        border: 1px solid rgba(0, 255, 200, 0.05);
-    }
-    .stat-label {
-        color: rgba(255, 255, 255, 0.4);
-        font-size: 10px;
-    }
-    .stat-value {
-        color: #00ffcc;
         font-size: 18px;
         font-weight: bold;
-        margin-top: 2px;
+        border-radius: 10px;
+        animation: slideIn 0.5s ease;
     }
-    .stat-value.gold {
-        color: #ffcc00;
+    @keyframes slideIn {
+        from { transform: translateY(-20px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
     }
-    .dict-container {
-        background: rgba(10, 10, 30, 0.95);
+    .success {
+        color: #00ff88;
+        background: rgba(0, 255, 136, 0.1);
+        border: 1px solid #00ff88;
+    }
+    .error {
+        color: #ff4444;
+        background: rgba(255, 68, 68, 0.1);
+        border: 1px solid #ff4444;
+    }
+    
+    /* أزرار */
+    .stButton > button {
+        background: linear-gradient(135deg, #00ffcc, #0088ff);
+        color: #0a0a1a;
+        border: none;
+        border-radius: 12px;
+        padding: 12px 20px;
+        font-weight: bold;
+        width: 100%;
+        transition: all 0.3s ease;
+        font-size: 16px;
+        margin: 5px 0;
+    }
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(0, 255, 200, 0.2);
+    }
+    .stButton > button:active {
+        transform: scale(0.95);
+    }
+    
+    /* شاشة البداية */
+    .start-screen {
+        text-align: center;
+        padding: 60px 20px;
+    }
+    .start-icon {
+        font-size: 80px;
+        margin-bottom: 20px;
+        animation: float 3s ease-in-out infinite;
+    }
+    @keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-20px); }
+    }
+    .start-title {
+        color: #00ffcc;
+        font-size: 32px;
+        font-weight: bold;
+        text-shadow: 0 0 40px rgba(0, 255, 200, 0.3);
+        margin-bottom: 10px;
+    }
+    .start-subtitle {
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 16px;
+        margin-bottom: 30px;
+    }
+    
+    /* شاشة النهاية */
+    .game-over-box {
+        text-align: center;
+        padding: 40px 20px;
+        background: rgba(20, 20, 50, 0.8);
         border-radius: 15px;
+        border: 2px solid rgba(255, 51, 51, 0.2);
+        margin: 20px 0;
+    }
+    .game-over-title {
+        color: #ff3366;
+        font-size: 36px;
+        font-weight: bold;
+        text-shadow: 0 0 40px rgba(255, 51, 102, 0.3);
+    }
+    .final-score {
+        color: #ffcc00;
+        font-size: 24px;
+        font-weight: bold;
+        margin: 10px 0;
+    }
+    
+    /* القاموس */
+    .dict-container {
+        background: linear-gradient(135deg, #0a0a1a, #1a1a3e);
         padding: 15px;
-        margin: 0 auto;
-        max-width: 450px;
-        min-height: 580px;
-        border: 1px solid rgba(0, 255, 200, 0.15);
+        min-height: 100vh;
+    }
+    .dict-title {
+        color: #00ffcc;
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 20px;
+        text-align: center;
     }
     .word-row {
         background: rgba(20, 20, 50, 0.7);
-        border-radius: 8px;
-        padding: 8px 12px;
-        margin: 5px 0;
+        border-radius: 10px;
+        padding: 12px 15px;
+        margin: 8px 0;
         display: flex;
         justify-content: space-between;
         align-items: center;
         border: 1px solid rgba(0, 255, 200, 0.05);
+        transition: all 0.3s ease;
+    }
+    .word-row:hover {
+        border-color: rgba(0, 255, 200, 0.2);
+        transform: translateX(5px);
     }
     .word-text {
         color: white;
-        font-size: 14px;
+        font-size: 15px;
         flex: 1;
+        margin: 0 10px;
     }
-    .edit-container {
-        background: rgba(10, 10, 30, 0.95);
-        border-radius: 15px;
-        padding: 15px;
-        margin: 0 auto;
-        max-width: 450px;
-        min-height: 580px;
-        border: 1px solid rgba(0, 255, 200, 0.15);
-    }
-    .stButton > button {
-        background: linear-gradient(135deg, #0d47a1, #1a237e);
-        color: white;
-        border: none;
-        border-radius: 10px;
-        padding: 8px 12px;
-        font-weight: bold;
-        width: 100%;
-        transition: all 0.2s ease;
-        font-size: 14px;
-    }
-    .stButton > button:hover {
-        transform: scale(1.02);
-        box-shadow: 0 0 20px rgba(0, 255, 200, 0.15);
-    }
-    .start-btn {
-        background: linear-gradient(135deg, #00ffcc, #00cc99) !important;
-        color: #0a0a1a !important;
-        font-size: 16px !important;
-        padding: 10px !important;
-    }
-    .start-btn:hover {
-        transform: scale(1.03) !important;
-        box-shadow: 0 0 30px rgba(0, 255, 200, 0.3) !important;
-    }
-    .status-bar {
+    .word-actions {
         display: flex;
-        justify-content: space-between;
+        gap: 8px;
+    }
+    .word-actions .stButton > button {
+        padding: 5px 15px;
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.3);
-        padding: 4px 5px;
-        margin: 4px 0;
-        border-top: 1px solid rgba(255, 255, 255, 0.03);
+        margin: 0;
+        width: auto;
     }
-    .stTextInput > div > div > input {
-        background: rgba(20, 20, 50, 0.8);
-        color: white;
-        border: 1px solid rgba(0, 255, 200, 0.15);
-        border-radius: 8px;
-        padding: 8px 12px;
-        font-size: 14px;
-    }
+    
+    /* تحسينات الإدخال */
+    .stTextInput > div > div > input,
     .stTextArea > div > div > textarea {
-        background: rgba(20, 20, 50, 0.8);
-        color: white;
-        border: 1px solid rgba(0, 255, 200, 0.15);
-        border-radius: 8px;
-        padding: 8px 12px;
-        font-size: 14px;
+        background: rgba(20, 20, 50, 0.8) !important;
+        color: white !important;
+        border: 1px solid rgba(0, 255, 200, 0.15) !important;
+        border-radius: 10px !important;
+        padding: 10px 15px !important;
+        font-size: 15px !important;
+    }
+    .stTextInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus {
+        border-color: #00ffcc !important;
+        box-shadow: 0 0 20px rgba(0, 255, 200, 0.1) !important;
     }
     .stSelectbox > div > div {
-        background: rgba(20, 20, 50, 0.8);
-        color: white;
-        border: 1px solid rgba(0, 255, 200, 0.15);
-        border-radius: 8px;
+        background: rgba(20, 20, 50, 0.8) !important;
+        color: white !important;
+        border: 1px solid rgba(0, 255, 200, 0.15) !important;
+        border-radius: 10px !important;
+    }
+    
+    /* إزالة المسافات الزائدة من العناصر */
+    .element-container {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    .stMarkdown {
+        margin: 0 !important;
+        padding: 0 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -523,33 +591,31 @@ st.markdown("""
 if not ARABIC_SUPPORT or not BIDI_SUPPORT:
     st.warning("⚠️ دعم اللغة العربية غير مكتمل. للتثبيت: pip install arabic_reshaper python-bidi")
 
-# الصفحات
+# الصفحات - محتوى مبسط بدون مسافات
 if st.session_state.page == 'game':
     st.markdown('<div class="game-container">', unsafe_allow_html=True)
     
-    # الرأس
-    st.markdown('<div class="header">', unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col1:
-        st.markdown(f'<div class="score-text">⭐ {st.session_state.score}</div>', unsafe_allow_html=True)
-    with col2:
-        lives_display = '❤️' * max(0, st.session_state.lives)
-        st.markdown(f'<div class="lives-text" style="text-align:center;">{lives_display}</div>', unsafe_allow_html=True)
-    with col3:
-        matched = len(st.session_state.matched_pairs) // 2
-        total = len(st.session_state.pairs) // 2
-        if total > 0:
-            st.markdown(f'<div style="text-align:right;color:rgba(255,255,255,0.25);font-size:13px;">{matched}/{total}</div>', unsafe_allow_html=True)
+    # الرأس المحسن
+    st.markdown('<div class="game-header">', unsafe_allow_html=True)
+    st.markdown(f'''
+    <div class="score-section">
+        <span class="score-item">⭐ {st.session_state.score}</span>
+        <span class="lives-item">{'❤️' * max(0, st.session_state.lives)}</span>
+    </div>
+    <div style="color:rgba(255,255,255,0.2);font-size:14px;">
+        {len(st.session_state.matched_pairs) // 2}/{len(st.session_state.pairs) // 2 if st.session_state.pairs else 0}
+    </div>
+    ''', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
     
     # شاشة البداية
     if not st.session_state.game_started and not st.session_state.game_over:
-        st.markdown('<div style="text-align:center;padding:20px 0;">', unsafe_allow_html=True)
-        st.markdown('<div style="font-size:40px;margin-bottom:10px;">🧩</div>', unsafe_allow_html=True)
-        st.markdown('<div style="color:#00ffcc;font-size:20px;font-weight:bold;">مطابقة الكلمات</div>', unsafe_allow_html=True)
-        st.markdown('<div style="color:rgba(255,255,255,0.3);font-size:12px;margin:5px 0 15px 0;">طابق الكلمة مع ترجمتها</div>', unsafe_allow_html=True)
+        st.markdown('<div class="start-screen">', unsafe_allow_html=True)
+        st.markdown('<div class="start-icon">🧩</div>', unsafe_allow_html=True)
+        st.markdown('<div class="start-title">مطابقة الكلمات</div>', unsafe_allow_html=True)
+        st.markdown('<div class="start-subtitle">طابق الكلمة مع ترجمتها الصحيحة</div>', unsafe_allow_html=True)
         
-        if st.button("🚀 ابدأ", use_container_width=True):
+        if st.button("🚀 ابدأ اللعبة", use_container_width=True):
             start_game()
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
@@ -570,9 +636,7 @@ if st.session_state.page == 'game':
                 is_selected = st.session_state.selected_pair == i
                 
                 if is_matched:
-                    display_text = "✅"
-                    bg_color = "rgba(0, 255, 200, 0.05)"
-                    st.markdown(f'<div class="card matched" style="background:{bg_color};font-size:24px;">{display_text}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="card matched">✓</div>', unsafe_allow_html=True)
                 else:
                     card_class = "card selected" if is_selected else "card"
                     display_text = pair['word']
@@ -588,29 +652,25 @@ if st.session_state.page == 'game':
             
             st.markdown('</div>', unsafe_allow_html=True)
             
-            # شريط الحالة
-            matched = len(st.session_state.matched_pairs) // 2
-            total = len(st.session_state.pairs) // 2
-            st.markdown(f'''
-            <div class="status-bar">
-                <span>📊 {matched}/{total}</span>
-                <span>🔄 {st.session_state.attempts}</span>
-            </div>
-            ''', unsafe_allow_html=True)
-            
-            # زر إعادة الترتيب
-            if st.session_state.round_active and len(st.session_state.matched_pairs) < len(st.session_state.pairs):
-                if st.button("🔄 إعادة الترتيب", use_container_width=True):
-                    generate_pairs()
-                    st.session_state.selected_pair = None
-                    st.session_state.message = ""
+            # أزرار التحكم
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.session_state.round_active and len(st.session_state.matched_pairs) < len(st.session_state.pairs):
+                    if st.button("🔄 إعادة ترتيب", use_container_width=True):
+                        generate_pairs()
+                        st.session_state.selected_pair = None
+                        st.session_state.message = ""
+                        st.rerun()
+            with col2:
+                if st.button("📚 القاموس", use_container_width=True):
+                    go_to_dict()
                     st.rerun()
         
-        # نهاية اللعبة (فوز)
+        # الفوز
         if len(st.session_state.matched_pairs) == len(st.session_state.pairs) and st.session_state.pairs:
-            st.markdown('<div style="text-align:center;padding:15px 0;">', unsafe_allow_html=True)
-            st.markdown('<div style="font-size:30px;">🎉</div>', unsafe_allow_html=True)
-            st.markdown(f'<div style="color:#00ffcc;font-size:16px;font-weight:bold;">أكملت جميع الأزواج!</div>', unsafe_allow_html=True)
+            st.markdown('<div style="text-align:center;padding:20px 0;">', unsafe_allow_html=True)
+            st.markdown('<div style="font-size:50px;">🎉</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="color:#00ffcc;font-size:20px;font-weight:bold;">أكملت جميع الأزواج!</div>', unsafe_allow_html=True)
             if st.button("🔄 لعبة جديدة", use_container_width=True):
                 generate_pairs()
                 st.session_state.matched_pairs = []
@@ -623,139 +683,102 @@ if st.session_state.page == 'game':
     # شاشة Game Over
     if st.session_state.game_over:
         st.markdown('<div class="game-over-box">', unsafe_allow_html=True)
-        st.markdown('<div class="game-over-title">💀 انتهت</div>', unsafe_allow_html=True)
-        
-        accuracy = (len(st.session_state.matched_pairs) // 2) / max(1, len(st.session_state.pairs) // 2) * 100
-        
-        st.markdown(f'''
-        <div class="stats-grid">
-            <div class="stat-item">
-                <div class="stat-label">⭐ النقاط</div>
-                <div class="stat-value gold">{st.session_state.score}</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">🏆 الأفضل</div>
-                <div class="stat-value gold">{get_high_score()}</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">🧩 المطابقات</div>
-                <div class="stat-value">{len(st.session_state.matched_pairs)//2}/{len(st.session_state.pairs)//2}</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">📊 الدقة</div>
-                <div class="stat-value">{accuracy:.0f}%</div>
-            </div>
-        </div>
-        ''', unsafe_allow_html=True)
+        st.markdown('<div class="game-over-title">💔 انتهت اللعبة</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="final-score">⭐ النقاط: {st.session_state.score}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="color:rgba(255,255,255,0.5);">🎯 أعلى نتيجة: {get_high_score()}</div>', unsafe_allow_html=True)
         
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("🔄 العب مجدداً", use_container_width=True):
+            if st.button("🔄 إعادة المحاولة", use_container_width=True):
                 reset_game()
                 st.rerun()
         with col2:
             if st.button("📚 القاموس", use_container_width=True):
                 go_to_dict()
                 st.rerun()
-        
         st.markdown('</div>', unsafe_allow_html=True)
-    
-    # زر القاموس
-    if st.session_state.game_started and not st.session_state.game_over and not st.session_state.round_active and not st.session_state.pairs:
-        if st.button("📚 القاموس", use_container_width=True):
-            go_to_dict()
-            st.rerun()
     
     st.markdown('</div>', unsafe_allow_html=True)
 
+# صفحة القاموس
 elif st.session_state.page == 'dict':
     st.markdown('<div class="dict-container">', unsafe_allow_html=True)
     
-    st.markdown('<div style="text-align:center;color:#00ffcc;font-size:22px;font-weight:bold;margin-bottom:15px;">📚 القاموس</div>', unsafe_allow_html=True)
+    st.markdown('<div class="dict-title">📚 القاموس</div>', unsafe_allow_html=True)
     
-    words = load_words()
-    if not words:
-        st.info("📝 لا توجد كلمات. أضف كلمات جديدة!")
-    
-    for i, word in enumerate(words):
-        col1, col2, col3 = st.columns([3, 1, 1])
-        with col1:
-            st.markdown(f'<div class="word-text">{fix_arabic_text(word["q"])} ＝ {fix_arabic_text(word["a"])}</div>', unsafe_allow_html=True)
-        with col2:
-            if st.button("✏️", key=f"edit_{i}", use_container_width=True):
-                open_edit(i)
-                st.rerun()
-        with col3:
-            if st.button("🗑️", key=f"del_{i}", use_container_width=True):
-                delete_word(i)
-                st.rerun()
-    
-    st.markdown("---")
+    # أزرار التحكم
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("➕ أضف كلمة", use_container_width=True):
-            open_edit(-1)
-            st.rerun()
-    with col2:
-        if st.button("🎮 العب", use_container_width=True):
+        if st.button("🎮 العودة للعبة", use_container_width=True):
             go_to_game()
             st.rerun()
+    with col2:
+        if st.button("➕ إضافة كلمة", use_container_width=True):
+            open_edit(-1)
+            st.rerun()
+    
+    # عرض الكلمات
+    words = load_words()
+    if words:
+        for i, word in enumerate(words):
+            st.markdown(f'''
+            <div class="word-row">
+                <span style="color:#00ffcc;font-weight:bold;">{fix_arabic_text(word['q'])}</span>
+                <span style="color:white;">→</span>
+                <span style="color:#ffcc00;">{fix_arabic_text(word['a'])}</span>
+            </div>
+            ''', unsafe_allow_html=True)
+            
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                if st.button(f"✏️ تعديل", key=f"edit_{i}", use_container_width=True):
+                    open_edit(i)
+                    st.rerun()
+            with col2:
+                if st.button(f"🗑️ حذف", key=f"delete_{i}", use_container_width=True):
+                    delete_word(i)
+                    st.rerun()
+    else:
+        st.markdown('<div style="text-align:center;color:rgba(255,255,255,0.3);padding:40px 0;">لا توجد كلمات في القاموس</div>', unsafe_allow_html=True)
     
     st.markdown('</div>', unsafe_allow_html=True)
 
+# صفحة التعديل
 elif st.session_state.page == 'edit':
-    st.markdown('<div class="edit-container">', unsafe_allow_html=True)
+    st.markdown('<div class="game-container">', unsafe_allow_html=True)
     
-    st.markdown('<div style="text-align:center;color:#00ffcc;font-size:22px;font-weight:bold;margin-bottom:15px;">✏️ تعديل الكلمة</div>', unsafe_allow_html=True)
+    title = "➕ إضافة كلمة جديدة" if st.session_state.word_to_edit == -1 else "✏️ تعديل كلمة"
+    st.markdown(f'<h2 style="color:#00ffcc;text-align:center;margin-bottom:20px;">{title}</h2>', unsafe_allow_html=True)
     
-    # اختيار اللغات
-    col1, col2, col3 = st.columns([1, 0.5, 1])
+    # حقول الإدخال
+    word = st.session_state.selected_word
+    q = st.text_input("📝 الكلمة الأصلية", value=word['q'] if word else "")
+    a = st.text_input("📝 الترجمة", value=word['a'] if word else "")
+    
+    # خيارات الترجمة
+    col1, col2 = st.columns(2)
     with col1:
         src_lang = st.selectbox("من", list(LANGUAGES.keys()), 
                                index=list(LANGUAGES.keys()).index(st.session_state.src_lang))
-        st.session_state.src_lang = src_lang
     with col2:
-        st.markdown('<div style="text-align:center;padding-top:20px;color:#00ffcc;font-size:20px;">➔</div>', unsafe_allow_html=True)
-    with col3:
-        target_lang = st.selectbox("إلى", list(LANGUAGES.keys()), 
+        target_lang = st.selectbox("إلى", list(LANGUAGES.keys()),
                                   index=list(LANGUAGES.keys()).index(st.session_state.target_lang))
-        st.session_state.target_lang = target_lang
     
-    # حقول الإدخال
-    if st.session_state.selected_word:
-        q = st.text_input("الكلمة", value=st.session_state.selected_word.get('q', ''), placeholder="أدخل الكلمة...")
-        a = st.text_area("الترجمة", value=st.session_state.selected_word.get('a', ''), height=70, placeholder="الترجمة...")
-    else:
-        q = st.text_input("الكلمة", value="", placeholder="أدخل الكلمة...")
-        a = st.text_area("الترجمة", value="", height=70, placeholder="الترجمة...")
-    
-    # الترجمة التلقائية
-    if st.button("✨ ترجمة تلقائية", use_container_width=True):
+    if st.button("🌐 ترجمة تلقائية", use_container_width=True):
         if q.strip():
-            with st.spinner("🔄 جاري الترجمة..."):
-                translated = translate_text(q, st.session_state.src_lang, st.session_state.target_lang)
-                if translated and "خطأ" not in translated:
-                    st.session_state.selected_word = {"q": q, "a": translated}
-                    st.rerun()
-                else:
-                    st.error("⚠️ فشلت الترجمة!")
-        else:
-            st.warning("⚠️ أدخل كلمة أولاً!")
+            translation = translate_text(q, src_lang, target_lang)
+            a = translation
+            st.rerun()
     
-    st.markdown("---")
+    # أزرار التحكم
     col1, col2 = st.columns(2)
     with col1:
         if st.button("💾 حفظ", use_container_width=True):
             if save_word(q, a):
-                st.success("✅ تم الحفظ!")
-                time.sleep(0.5)
                 st.rerun()
-            else:
-                st.error("❌ املأ كلا الحقلين!")
     with col2:
         if st.button("❌ إلغاء", use_container_width=True):
             st.session_state.page = 'dict'
-            st.session_state.edit_mode = False
             st.rerun()
     
     st.markdown('</div>', unsafe_allow_html=True)
